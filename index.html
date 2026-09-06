@@ -205,6 +205,16 @@ input,textarea,select{font-family:var(--body)}
 }
 .last-hint span{color:var(--text3);font-size:11px}
 
+.ex-note{
+  margin:0 14px 8px;
+  padding:8px 10px;
+  background:rgba(74,143,212,0.08);
+  border:1px solid rgba(74,143,212,0.22);
+  border-radius:7px;
+  font-size:12px;color:var(--text2);
+  line-height:1.45;
+}
+
 .quickfill-row{
   display:flex;gap:6px;
   padding:0 14px 8px 34px;
@@ -368,6 +378,38 @@ input,textarea,select{font-family:var(--body)}
 .meas-f{background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:10px 12px}
 .meas-f label{display:block;font-size:10px;color:var(--text3);font-family:var(--semi);font-weight:600;text-transform:uppercase;letter-spacing:0.4px;margin-bottom:4px}
 .meas-f input{background:none;border:none;color:var(--text);font-size:15px;font-weight:600;width:100%;outline:none}
+
+/* Measurements History (trend cards + table) */
+.meas-hist-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.meas-hist-item{background:var(--bg3);border:1px solid var(--border);border-radius:9px;padding:11px 12px}
+.mh-label{font-size:10.5px;color:var(--text3);font-family:var(--semi);font-weight:600;text-transform:uppercase;letter-spacing:0.4px;margin-bottom:3px}
+.mh-value{font-family:var(--disp);font-size:20px;font-weight:800;color:var(--text)}
+.mh-unit{font-family:var(--body);font-size:11px;font-weight:500;color:var(--text3);margin-left:2px}
+
+/* Pull-up progression roadmap */
+.pullup-roadmap{display:flex;flex-direction:column;gap:8px;margin-top:14px}
+.pu-phase{
+  display:flex;gap:10px;padding:11px 12px;
+  background:var(--bg3);border:1px solid var(--border);border-radius:9px;
+  opacity:0.55;transition:all 0.2s;
+}
+.pu-phase.done{opacity:0.75}
+.pu-phase.active{
+  opacity:1;border-color:rgba(232,184,75,0.4);
+  background:rgba(232,184,75,0.06);
+}
+.pu-phase-badge{
+  width:24px;height:24px;border-radius:50%;flex-shrink:0;
+  display:flex;align-items:center;justify-content:center;
+  font-family:var(--disp);font-size:13px;font-weight:800;
+  background:var(--bg2);border:1.5px solid var(--border);color:var(--text3);
+}
+.pu-phase.active .pu-phase-badge{background:var(--gold);border-color:var(--gold);color:var(--bg)}
+.pu-phase.done .pu-phase-badge{background:var(--green);border-color:var(--green);color:white}
+.pu-phase-body{flex:1;min-width:0}
+.pu-phase-name{font-size:13.5px;font-weight:600;color:var(--text)}
+.pu-phase-range{font-size:11px;color:var(--text3);font-weight:500;font-family:var(--semi)}
+.pu-phase-goal{font-size:12px;color:var(--text2);line-height:1.45;margin-top:2px}
 
 /* Milestones */
 .milestone{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:8px;background:var(--bg3);border:1px solid var(--border);margin-bottom:6px;font-size:13px}
@@ -567,10 +609,15 @@ input,textarea,select{font-family:var(--body)}
       </div>
 
       <div class="card">
-        <div class="card-title">BODY MEASUREMENTS</div>
-        <p style="font-size:12px;color:var(--text3);margin-bottom:12px">Update every 4 weeks</p>
-        <div class="meas-grid" id="meas-grid"></div>
-        <button class="save-btn" onclick="saveMeasurements()" style="margin-top:12px;font-size:16px;padding:12px">SAVE MEASUREMENTS</button>
+        <div class="card-title">MEASUREMENTS PROGRESS</div>
+        <p style="font-size:12px;color:var(--text3);margin-bottom:12px">Logged with "Log This Week" above · Recommended every 4 weeks</p>
+        <div id="meas-history"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">🎯 PULL-UP PROGRESS</div>
+        <p style="font-size:12px;color:var(--text3);margin-bottom:12px">Test every 2 weeks · Goal: 10 clean unassisted reps</p>
+        <div id="pullup-progress"></div>
       </div>
 
       <div class="card">
@@ -739,10 +786,11 @@ const DAYS = {
     cssColor: 'var(--green)',
     exercises: [
       {id:'B1', n:1, name:'Deadlift',              equip:'Olympic Bar · from floor · neutral spine', sets:3, reps:'5',      tempo:'1-1-2', rest:'3 min'},
-      {id:'B2', n:2, name:'Wide-Grip Pull-Up',      equip:'M4.2 Pull-Up Bar · wide pronated grip',   sets:4, reps:'5–8',    tempo:'2-1-2', rest:'2 min'},
-      {id:'B3', n:3, name:'Bent-Over Barbell Row',  equip:'Olympic Bar · hip hinge 45° · elbows back',sets:3, reps:'6',     tempo:'1-1-3', rest:'2 min'},
-      {id:'B4', n:4, name:'Cable Face Pull',        equip:'M4.2 Cable High · rope · 2nd time this week',sets:3, reps:'15',  tempo:'2-1-2', rest:'60 sec'},
-      {id:'B5', n:5, name:'DB Supinating Curl',     equip:'Dumbbells · supinate at top · strict',    sets:4, reps:'12',     tempo:'2-1-2', rest:'60 sec'},
+      {id:'B2', n:2, name:'Cable Lat Pulldown',     equip:'M4.2 Cable High · lat bar + leg holder',  sets:4, reps:'6–8',   tempo:'2-1-2', rest:'90 sec'},
+      {id:'B3', n:3, name:'Negative Pull-Up',       equip:'M4.2 Pull-Up Bar · step/jump to top, lower slow', sets:3, reps:'3–5', tempo:'5-1-X', rest:'90 sec', note:"💡 If you can't control the lower for at least 3 seconds, use a resistance band around the bar and your knee for assistance — same drill, less bodyweight."},
+      {id:'B4', n:4, name:'Bent-Over Barbell Row',  equip:'Olympic Bar · hip hinge 45° · elbows back',sets:3, reps:'6',     tempo:'1-1-3', rest:'2 min'},
+      {id:'B5', n:5, name:'Cable Face Pull',        equip:'M4.2 Cable High · rope · 2nd time this week',sets:3, reps:'15',  tempo:'2-1-2', rest:'60 sec'},
+      {id:'B6', n:6, name:'DB Supinating Curl',     equip:'Dumbbells · supinate at top · strict',    sets:4, reps:'12',     tempo:'2-1-2', rest:'60 sec'},
     ],
     core: [
       {id:'Bc1', name:'Bird Dog',       equip:'Bodyweight · opposite arm+leg · 2s hold', sets:3, reps:'8/side', why:'McGill Big 3 · multifidus · deep spine stabiliser'},
@@ -976,6 +1024,10 @@ function renderToday() {
 
     if (lastSum) {
       h += `<div class="last-hint"><span>Last session:</span> ${lastSum}</div>`;
+    }
+
+    if (ex.note) {
+      h += `<div class="ex-note">${ex.note}</div>`;
     }
 
     h += `<div class="sets-grid">
@@ -1357,7 +1409,8 @@ function renderProgress() {
 
   drawChart(logs, sw, tw);
   renderLogTable(logs);
-  renderMeas();
+  renderMeasHistory();
+  renderPullupProgress();
   renderMilestones(lost);
 }
 
@@ -1453,27 +1506,154 @@ function renderLogTable(logs) {
   el.innerHTML = h;
 }
 
-function renderMeas() {
-  const fields = [
-    {k:'waist',l:'Waist (in)'},{k:'chest',l:'Chest (in)'},
-    {k:'hips',l:'Hips (in)'},{k:'arm',l:'Upper Arm (in)'},
-    {k:'bf',l:'Body Fat %'},{k:'rhr',l:'Resting HR'},
-  ];
-  const el = document.getElementById('meas-grid');
+function renderMeasHistory() {
+  const el = document.getElementById('meas-history');
   if (!el) return;
-  el.innerHTML = fields.map(f => `
-    <div class="meas-f">
-      <label>${f.l}</label>
-      <input type="number" id="m-${f.k}" placeholder="—" value="${S.measurements[f.k]||''}" step="0.1">
-    </div>`).join('');
+
+  const fields = [
+    {k:'waist', l:'Waist',    unit:'in', goodDir:'down'},
+    {k:'chest', l:'Chest',    unit:'in', goodDir:'up'},
+    {k:'hips',  l:'Hips',     unit:'in', goodDir:'down'},
+    {k:'arm',   l:'Arm',      unit:'in', goodDir:'up'},
+    {k:'bf',    l:'Body Fat', unit:'%',  goodDir:'down'},
+    {k:'rhr',   l:'Resting HR', unit:'bpm', goodDir:'down'},
+  ];
+
+  // Only weeks that have at least one measurement filled in
+  const logs = [...S.weekLog]
+    .filter(l => fields.some(f => l[f.k]))
+    .sort((a,b) => +a.week - +b.week);
+
+  if (!logs.length) {
+    el.innerHTML = `<div style="text-align:center;padding:24px 10px;color:var(--text3);font-size:13px;line-height:1.6">
+      No measurements logged yet.<br>Tap "+ Log This Week" above and fill in waist, chest, hips, arm, body fat %, or resting HR — whichever you track.
+    </div>`;
+    return;
+  }
+
+  const first = logs[0];
+  const latest = logs[logs.length - 1];
+
+  let h = `<div class="meas-hist-grid">`;
+  fields.forEach(f => {
+    const firstVal = parseFloat(first[f.k]);
+    const latestVal = parseFloat(latest[f.k]);
+    if (isNaN(latestVal)) return; // never logged this metric
+
+    let deltaHtml = '';
+    if (!isNaN(firstVal) && logs.length > 1) {
+      const delta = latestVal - firstVal;
+      const improved = f.goodDir === 'down' ? delta < 0 : delta > 0;
+      const arrow = delta === 0 ? '—' : (delta > 0 ? '▲' : '▼');
+      const color = delta === 0 ? 'var(--text3)' : (improved ? 'var(--green)' : 'var(--red)');
+      deltaHtml = `<span style="color:${color};font-size:12px;font-weight:600;margin-left:6px">${arrow} ${Math.abs(delta).toFixed(1)}</span>`;
+    }
+
+    h += `<div class="meas-hist-item">
+      <div class="mh-label">${f.l}</div>
+      <div class="mh-value">${latestVal}<span class="mh-unit">${f.unit}</span>${deltaHtml}</div>
+    </div>`;
+  });
+  h += `</div>`;
+
+  // Full history table
+  h += `<div class="log-wrap" style="margin-top:14px"><table class="log-tbl">
+    <thead><tr><th>Wk</th><th>Waist</th><th>Chest</th><th>Hips</th><th>Arm</th><th>BF%</th><th>RHR</th></tr></thead>
+    <tbody>`;
+  [...logs].reverse().forEach(l => {
+    h += `<tr>
+      <td><span class="wk-pill">W${l.week}</span></td>
+      <td>${l.waist ? `<span class="lift-val">${l.waist}"</span>` : '—'}</td>
+      <td>${l.chest ? `<span class="lift-val">${l.chest}"</span>` : '—'}</td>
+      <td>${l.hips  ? `<span class="lift-val">${l.hips}"</span>`  : '—'}</td>
+      <td>${l.arm   ? `<span class="lift-val">${l.arm}"</span>`   : '—'}</td>
+      <td>${l.bf    ? `<span class="lift-val">${l.bf}%</span>`    : '—'}</td>
+      <td>${l.rhr   ? `<span class="lift-val">${l.rhr}</span>`    : '—'}</td>
+    </tr>`;
+  });
+  h += `</tbody></table></div>`;
+
+  el.innerHTML = h;
 }
 
-function saveMeasurements() {
-  ['waist','chest','hips','arm','bf','rhr'].forEach(k => {
-    const el = document.getElementById('m-'+k);
-    if (el) S.measurements[k] = el.value;
+// ═══════════════════════════════════════════════════════════
+// PULL-UP PROGRESSION TRACKER
+// ═══════════════════════════════════════════════════════════
+const PULLUP_PHASES = [
+  {phase:1, name:'Foundation',       range:'0 reps',   goal:'Control a 3–5 second negative with good form. Use a band if you can\\'t control 3 sec yet.'},
+  {phase:2, name:'Extend the Negative', range:'0 reps', goal:'Push your negative descent to 5–8 seconds, fully controlled, no band needed.'},
+  {phase:3, name:'First Reps',       range:'1–4 reps', goal:'Attempt real pull-ups before your negative sets. Any upward movement counts — build from there.'},
+  {phase:4, name:'Building to 10',   range:'5–9 reps',  goal:'Straight sets of unassisted pull-ups to fatigue, negatives to finish remaining volume.'},
+  {phase:5, name:'Goal Achieved',    range:'10+ reps',  goal:'10 clean unassisted reps in a row. From here, add weight to keep progressing.'},
+];
+
+function getPullupPhase(maxReps, maxNegSec) {
+  if (maxReps >= 10) return 5;
+  if (maxReps >= 5) return 4;
+  if (maxReps >= 1) return 3;
+  if (maxNegSec >= 5) return 2;
+  return 1;
+}
+
+function renderPullupProgress() {
+  const el = document.getElementById('pullup-progress');
+  if (!el) return;
+
+  const logs = [...S.weekLog]
+    .filter(l => l.negsec || l.pullupreps)
+    .sort((a,b) => +a.week - +b.week);
+
+  if (!logs.length) {
+    el.innerHTML = `<div style="text-align:center;padding:24px 10px;color:var(--text3);font-size:13px;line-height:1.6">
+      No pull-up tests logged yet.<br>Tap "+ Log This Week" above and fill in your negative hold time and unassisted reps whenever you test — every 2 weeks is ideal.
+    </div>`;
+    return;
+  }
+
+  const latest = logs[logs.length - 1];
+  const maxReps = Math.max(...logs.map(l => parseFloat(l.pullupreps) || 0));
+  const maxNegSec = Math.max(...logs.map(l => parseFloat(l.negsec) || 0));
+  const currentPhase = getPullupPhase(maxReps, maxNegSec);
+
+  let h = `<div class="meas-hist-grid">
+    <div class="meas-hist-item">
+      <div class="mh-label">Best Negative Hold</div>
+      <div class="mh-value">${maxNegSec || '—'}<span class="mh-unit">sec</span></div>
+    </div>
+    <div class="meas-hist-item">
+      <div class="mh-label">Max Unassisted Reps</div>
+      <div class="mh-value">${maxReps || '0'}<span class="mh-unit">reps</span></div>
+    </div>
+  </div>`;
+
+  // Phase roadmap
+  h += `<div class="pullup-roadmap">`;
+  PULLUP_PHASES.forEach(p => {
+    const active = p.phase === currentPhase;
+    const done = p.phase < currentPhase;
+    h += `<div class="pu-phase${active?' active':''}${done?' done':''}">
+      <div class="pu-phase-badge">${done ? '✓' : p.phase}</div>
+      <div class="pu-phase-body">
+        <div class="pu-phase-name">${p.name} <span class="pu-phase-range">${p.range}</span></div>
+        <div class="pu-phase-goal">${p.goal}</div>
+      </div>
+    </div>`;
   });
-  persist(); toast('Measurements saved!');
+  h += `</div>`;
+
+  // History table
+  h += `<div class="log-wrap" style="margin-top:14px"><table class="log-tbl">
+    <thead><tr><th>Wk</th><th>Negative Hold</th><th>Unassisted Reps</th></tr></thead><tbody>`;
+  [...logs].reverse().forEach(l => {
+    h += `<tr>
+      <td><span class="wk-pill">W${l.week}</span></td>
+      <td>${l.negsec ? `<span class="lift-val">${l.negsec}s</span>` : '—'}</td>
+      <td>${l.pullupreps !== undefined && l.pullupreps !== '' ? `<span class="lift-val">${l.pullupreps}</span>` : '—'}</td>
+    </tr>`;
+  });
+  h += `</tbody></table></div>`;
+
+  el.innerHTML = h;
 }
 
 function renderMilestones(lost) {
@@ -1498,6 +1678,14 @@ function openLogModal() {
     {id:'wl-deadlift',l:'Deadlift (lbs)',type:'number',ph:'185'},
     {id:'wl-ohp',l:'OHP (lbs)',type:'number',ph:'85'},
     {id:'wl-row',l:'Row (lbs)',type:'number',ph:'115'},
+    {id:'wl-waist',l:'Waist (in)',type:'number',ph:'34',step:'0.25'},
+    {id:'wl-chest',l:'Chest (in)',type:'number',ph:'42',step:'0.25'},
+    {id:'wl-hips',l:'Hips (in)',type:'number',ph:'38',step:'0.25'},
+    {id:'wl-arm',l:'Arm (in)',type:'number',ph:'14',step:'0.25'},
+    {id:'wl-bf',l:'Body Fat %',type:'number',ph:'18',step:'0.5'},
+    {id:'wl-rhr',l:'Resting HR',type:'number',ph:'65'},
+    {id:'wl-negsec',l:'Negative Hold (sec)',type:'number',ph:'3',step:'0.5'},
+    {id:'wl-pullupreps',l:'Unassisted Pull-Up Reps',type:'number',ph:'0'},
     {id:'wl-energy',l:'Energy (1–10)',type:'number',ph:'8'},
     {id:'wl-sleep',l:'Sleep (hrs)',type:'number',ph:'8'},
     {id:'wl-notes',l:'Notes',type:'text',ph:'How did it go?',full:true},
@@ -1505,7 +1693,7 @@ function openLogModal() {
   document.getElementById('log-modal-fields').innerHTML = fields.map(f =>
     `<div class="meas-f"${f.full?' style="grid-column:span 2"':''}>
       <label>${f.l}</label>
-      <input type="${f.type}" id="${f.id}" placeholder="${f.ph}" style="width:100%;background:none;border:none;color:var(--text);font-size:15px;font-weight:600;outline:none">
+      <input type="${f.type}" id="${f.id}" placeholder="${f.ph}" ${f.step?`step="${f.step}"`:''} style="width:100%;background:none;border:none;color:var(--text);font-size:15px;font-weight:600;outline:none">
     </div>`
   ).join('');
   document.getElementById('log-modal').classList.add('open');
@@ -1524,6 +1712,14 @@ function saveWeekLog() {
     deadlift: document.getElementById('wl-deadlift')?.value,
     ohp:      document.getElementById('wl-ohp')?.value,
     row:      document.getElementById('wl-row')?.value,
+    waist:    document.getElementById('wl-waist')?.value,
+    chest:    document.getElementById('wl-chest')?.value,
+    hips:     document.getElementById('wl-hips')?.value,
+    arm:      document.getElementById('wl-arm')?.value,
+    bf:       document.getElementById('wl-bf')?.value,
+    rhr:      document.getElementById('wl-rhr')?.value,
+    negsec:      document.getElementById('wl-negsec')?.value,
+    pullupreps:  document.getElementById('wl-pullupreps')?.value,
     energy:   document.getElementById('wl-energy')?.value,
     sleep:    document.getElementById('wl-sleep')?.value,
     notes:    document.getElementById('wl-notes')?.value,
@@ -1571,8 +1767,12 @@ ATHLETE: Age 40 · 5'9" · Start weight: ${S.profile.startW||182} lbs · Current
 PROGRAM: FOREVER EDITION — research-backed, designed for years not months. 50 min sessions. Straight sets, no supersets.
 ROTATING CYCLE: Day 1→2→3→1→2→3 (not fixed to Mon/Wed/Fri — train any days, always 48hrs+ between same day number)
 DAY 1 (PUSH - Chest+Shoulders+Triceps): Smith Incline Press 4×6-8, DB Shoulder Press 4×8-10, Cable Chest Fly 3×12, DB Lateral Raise 3×15, Cable Tricep Pushdown 3×12, Cable Face Pull 3×15. Core: Dead Bug, Pallof Press. Finisher: Jump Rope 6min.
-DAY 2 (PULL - Back+Biceps+Rear Delts): Deadlift 3×5, Wide Pull-Up 4×5-8, Barbell Row 3×6, Cable Face Pull 3×15 (2nd time this week), DB Supinating Curl 4×12. Core: Bird Dog, McGill Curl-Up. Finisher: Peloton Zone 2.
+DAY 2 (PULL - Back+Biceps+Rear Delts): Deadlift 3×5, Cable Lat Pulldown 4×6-8, Negative Pull-Up 3×3-5 (5-sec controlled lower — pull-up progression toward 10 unassisted reps), Barbell Row 3×6, Cable Face Pull 3×15 (2nd time this week), DB Supinating Curl 4×12. Core: Bird Dog, McGill Curl-Up. Finisher: Peloton Zone 2.
 DAY 3 (LEGS - Quads+Hamstrings+Glutes): Squat 4×5, Smith Hip Thrust 4×10, RDL 3×8, Bulgarian Split Squat 3×8/leg, Nordic Curl 2×5-6. Core: Landmine Twist, Hanging KR, Plank. Finisher: Peloton Intervals.
+
+PULL-UP PROGRESSION (athlete cannot yet do unassisted pull-ups, goal is 10 clean reps):
+Cable Lat Pulldown is now the PRIMARY back-width driver every session (research: 8 weeks of pulldown training markedly improves pull-up performance, comparable lat/bicep/trap activation to real pull-ups). Negative Pull-Ups are the direct bridge exercise — step or jump to top position, lower for 5 seconds under control. Eccentric (lowering) strength develops before concentric (pulling) strength, so negatives build the exact strength needed for a first rep. If athlete cannot control a 3-second lower, they should use a resistance band around the bar and knee for assistance first.
+5-Phase Roadmap: Phase 1 Foundation (control 3-5 sec negative) → Phase 2 Extend Negative (5-8 sec, no band) → Phase 3 First Reps (1-4 unassisted) → Phase 4 Building to 10 (5-9 reps) → Phase 5 Goal Achieved (10+ reps, then add weight). Test negative hold time and unassisted rep count every 2 weeks, logged in the app's Progress tab.
 
 TRAINING PROTOCOL (research-backed):
 - RIR (Reps in Reserve): stop compound lifts (squat/deadlift/row/press) at 2-3 RIR. Isolation lifts (curls/raises/cable work) can go closer to 1 RIR. Never train to complete failure — research shows RIR 1-3 builds equal muscle with far less fatigue/injury risk.
