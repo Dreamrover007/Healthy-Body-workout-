@@ -774,7 +774,6 @@ const DAYS = {
       {name:'Arm Circles — big + small', dur:'10 each direction'},
       {name:'Dead Bug — slow',           dur:'6 reps/side'},
     ],
-    pf: true,
     finisher: 'Jump Rope — 6 rounds × 30 sec fast / 30 sec rest',
     finDur: '6 min',
   },
@@ -804,7 +803,6 @@ const DAYS = {
       {name:'Band or cable face pull',    dur:'15 reps'},
       {name:'Dead Bug — slow',            dur:'6 reps/side'},
     ],
-    pf: true,
     finisher: 'Peloton Zone 2 — 12 min easy conversational pace',
     finDur: '12 min',
   },
@@ -834,19 +832,10 @@ const DAYS = {
       {name:'Glute Bridge hold 3s',               dur:'12 reps'},
       {name:'Dead Bug — slow',                    dur:'6 reps/side'},
     ],
-    pf: true,
     finisher: 'Peloton Intervals — 6 rounds × 1 min hard / 2 min easy',
     finDur: '18 min',
   },
 };
-
-const PF_ITEMS = [
-  {name:'Standard Kegel — 5 sec on / 5 sec off',  target:'3 × 10 reps', key:'pf1'},
-  {name:'Long Hold Kegel — 10 sec squeeze',         target:'3 × 8 reps',  key:'pf2'},
-  {name:'Quick Flicks — rapid contractions',         target:'3 × 10 sec',  key:'pf3'},
-  {name:'★ Reverse Kegel — push out + release',     target:'3 × 10 reps', key:'pf4', star:true},
-  {name:'Diaphragmatic Breathing — 4s in / 6s out', target:'2 min',       key:'pf5'},
-];
 
 const MILESTONES = [
   {wk:'1–2',   txt:'Energy up · pelvic floor responding · sleep improving',    thresh:1},
@@ -874,7 +863,6 @@ let S = {
   onboarded: false, // welcome card dismissed
   sets: {},        // {exId: [{w,r,done},...]}
   warmup: [],      // completed indices
-  pf: [],          // completed pf indices
   core: [],        // completed core indices
   draftnotes: {},  // {A:'', B:'', C:''}
   lastW: {},       // {day: {exId: [{w,r}]}}
@@ -926,7 +914,6 @@ function selectDay(d) {
   S.day = d;
   S.sets = {};
   S.warmup = [];
-  S.pf = [];
   S.core = [];
   // Don't clear draftnotes — keep current draft
   document.querySelectorAll('.day-tab').forEach(t => {
@@ -1099,21 +1086,6 @@ function renderToday() {
     </div>
   </div>`;
 
-  // Pelvic floor
-  h += `<div class="sec-label" style="margin-top:6px">Pelvic Floor · 10 min Daily</div>`;
-  h += `<div class="check-list">`;
-  PF_ITEMS.forEach((item, i) => {
-    const done = S.pf.includes(i);
-    h += `<div class="check-item">
-      <div class="check-circle ${done?'done':''}" onclick="toggleCheck('pf',${i})" id="pf${i}">${done?'✓':''}</div>
-      <div class="check-text${item.star?' ':''}" style="${item.star?'color:var(--purple);font-weight:600':''}">
-        ${item.name}
-        <span class="check-sub" style="${item.star?'color:var(--purple);opacity:0.8':''}">${item.target}</span>
-      </div>
-    </div>`;
-  });
-  h += `</div>`;
-
   // Notes
   const prevNote = S.lastNotes[S.day] || '';
   const draft = S.draftnotes[S.day] || '';
@@ -1238,10 +1210,10 @@ function dismissWelcome() {
 }
 
 function toggleCheck(type, i) {
-  const arr = type === 'warmup' ? S.warmup : type === 'pf' ? S.pf : S.core;
+  const arr = type === 'warmup' ? S.warmup : S.core;
   const idx = arr.indexOf(i);
   if (idx === -1) arr.push(i); else arr.splice(idx,1);
-  const el = document.getElementById((type==='warmup'?'wu':type==='pf'?'pf':'co') + i);
+  const el = document.getElementById((type==='warmup'?'wu':'co') + i);
   if (el) { el.className = 'check-circle' + (arr.includes(i)?' done':''); el.textContent = arr.includes(i)?'✓':''; }
   persist();
 }
@@ -1342,7 +1314,7 @@ function saveSession() {
     id: Date.now(), day: S.day, week, weight, time, notes,
     date: new Date().toLocaleDateString(),
     sets: JSON.parse(JSON.stringify(S.sets)),
-    warmupDone: S.warmup.length, pfDone: S.pf.length,
+    warmupDone: S.warmup.length,
     volume: totalVolume, prs: prs.length,
   });
 
@@ -1354,7 +1326,7 @@ function saveSession() {
   }
 
   // Reset for next session
-  S.sets = {}; S.warmup = []; S.pf = []; S.core = [];
+  S.sets = {}; S.warmup = []; S.core = [];
   if (S.draftnotes) S.draftnotes[S.day] = '';
   persist();
   showSessionSummary(day, totalVolume, setsLogged, prs);
@@ -1418,6 +1390,7 @@ function drawChart(logs, sw, tw) {
   const canvas = document.getElementById('wt-chart');
   if (!canvas) return;
   const ctx = canvas.getContext('2d');
+  if (!ctx) return;
   const DPR = window.devicePixelRatio || 1;
   const CW = canvas.parentElement.offsetWidth || 300;
   const CH = 150;
@@ -1580,7 +1553,7 @@ function renderMeasHistory() {
 // PULL-UP PROGRESSION TRACKER
 // ═══════════════════════════════════════════════════════════
 const PULLUP_PHASES = [
-  {phase:1, name:'Foundation',       range:'0 reps',   goal:'Control a 3–5 second negative with good form. Use a band if you can\\'t control 3 sec yet.'},
+  {phase:1, name:'Foundation',       range:'0 reps',   goal:'Control a 3–5 second negative with good form. Use a band if you can\'t control 3 sec yet.'},
   {phase:2, name:'Extend the Negative', range:'0 reps', goal:'Push your negative descent to 5–8 seconds, fully controlled, no band needed.'},
   {phase:3, name:'First Reps',       range:'1–4 reps', goal:'Attempt real pull-ups before your negative sets. Any upward movement counts — build from there.'},
   {phase:4, name:'Building to 10',   range:'5–9 reps',  goal:'Straight sets of unassisted pull-ups to fatigue, negatives to finish remaining volume.'},
