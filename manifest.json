@@ -1,7 +1,7 @@
 {
   "name": "The Athletic 40 — Forever Edition",
   "short_name": "Athletic 40",
-  "description": "Research-backed 3-day rotation with pull-up progression and PR detection.",
+  "description": "Research-backed training for years, not months. Full long-term progress tracking.",
   "start_url": "./index.html",
   "display": "standalone",
   "orientation": "portrait",

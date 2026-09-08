@@ -615,6 +615,12 @@ input,textarea,select{font-family:var(--body)}
       </div>
 
       <div class="card">
+        <div class="card-title">🧮 BODY COMPOSITION</div>
+        <p style="font-size:12px;color:var(--text3);margin-bottom:12px">Estimated from waist, neck &amp; height · Navy Method · ±3–4% accuracy</p>
+        <div id="body-comp"></div>
+      </div>
+
+      <div class="card">
         <div class="card-title">🎯 PULL-UP PROGRESS</div>
         <p style="font-size:12px;color:var(--text3);margin-bottom:12px">Test every 2 weeks · Goal: 10 clean unassisted reps</p>
         <div id="pullup-progress"></div>
@@ -676,6 +682,7 @@ input,textarea,select{font-family:var(--body)}
       <div class="settings-card">
         <div class="srow"><span class="icon">👤</span><label>Name</label><input type="text" id="p-name" placeholder="Your name" style="text-align:right"></div>
         <div class="srow"><span class="icon">⚖️</span><label>Start Weight (lbs)</label><input type="number" id="p-sw" value="182"></div>
+        <div class="srow"><span class="icon">📏</span><label>Height (cm)</label><input type="number" id="p-height" value="175" step="0.5"></div>
         <div class="srow"><span class="icon">🎯</span><label>Target Weight (lbs)</label><input type="number" id="p-tw" value="163"></div>
         <div class="srow"><span class="icon">📅</span><label>Program Start</label><input type="text" id="p-sd" placeholder="e.g. Jan 6" style="text-align:right"></div>
       </div>
@@ -838,11 +845,15 @@ const DAYS = {
 };
 
 const MILESTONES = [
-  {wk:'1–2',   txt:'Energy up · pelvic floor responding · sleep improving',    thresh:1},
-  {wk:'3–4',   txt:'3–4 lbs down · clothes looser · strength climbing',        thresh:3},
-  {wk:'6–8',   txt:'Visible shoulder + arm definition · 7–8 lbs down',         thresh:7},
-  {wk:'10–12', txt:'Athletic physique emerging · 12+ lbs down',                thresh:12},
-  {wk:'14–16', txt:'TARGET: 160–168 lbs · Lean, strong, athletic',             thresh:18},
+  {wk:'1–2',   txt:'Energy up · sleep improving · strength climbing',          type:'weight', thresh:1},
+  {wk:'3–4',   txt:'3–4 lbs down · clothes looser · strength climbing',        type:'weight', thresh:3},
+  {wk:'6–8',   txt:'Visible shoulder + arm definition · 7–8 lbs down',         type:'weight', thresh:7},
+  {wk:'10–12', txt:'Athletic physique emerging · 12+ lbs down',                type:'weight', thresh:12},
+  {wk:'14–16', txt:'Initial target reached · 160–168 lbs · lean, strong, athletic', type:'weight', thresh:18},
+  {wk:'20–28', txt:'Lean bulk phase · rebuilding with muscle, not fat',        type:'week', thresh:20},
+  {wk:'32–40', txt:'Second cut cycle · revealing the muscle you built',        type:'week', thresh:32},
+  {wk:'~52',   txt:'One full year trained · strength and physique transformed',type:'week', thresh:52},
+  {wk:'80+',   txt:'Deload discipline is second nature · this is just who you are now', type:'week', thresh:80},
 ];
 
 const CHIPS = [
@@ -870,7 +881,7 @@ let S = {
   sessions: [],
   weekLog: [],
   measurements: {},
-  profile: {name:'',startW:182,targetW:163,startDate:''},
+  profile: {name:'',startW:182,targetW:163,startDate:'',heightCm:175},
   timer: null,
   timerSec: 0,
   timerTotal: 0,
@@ -1382,8 +1393,10 @@ function renderProgress() {
   drawChart(logs, sw, tw);
   renderLogTable(logs);
   renderMeasHistory();
+  renderBodyComposition();
   renderPullupProgress();
-  renderMilestones(lost);
+  const maxWeekLogged = logs.reduce((mx, l) => Math.max(mx, +l.week || 0), 0);
+  renderMilestones(lost, maxWeekLogged);
 }
 
 function drawChart(logs, sw, tw) {
@@ -1406,7 +1419,11 @@ function drawChart(logs, sw, tw) {
   const allW = [sw,...pts.map(p=>p.w),tw];
   const minW = Math.min(...allW)-3, maxW = Math.max(...allW)+3;
 
-  const tx = wk => pad.l + (wk/16)*gW;
+  // Auto-scale x-axis to however many weeks are actually logged (min 16 so early weeks aren't stretched)
+  const maxWeekLogged = pts.length > 1 ? Math.max(...pts.map(p=>p.wk)) : 16;
+  const chartMaxWeek = Math.max(16, maxWeekLogged);
+
+  const tx = wk => pad.l + (wk/chartMaxWeek)*gW;
   const ty = v  => pad.t + ((maxW-v)/(maxW-minW))*gH;
 
   // Grid
@@ -1450,9 +1467,14 @@ function drawChart(logs, sw, tw) {
     ctx.textAlign='center'; ctx.fillText('Log weekly weight to see your trend',CW/2,CH/2);
   }
 
-  // X labels
+  // X labels — evenly spaced across whatever range is actually being shown
   ctx.fillStyle='#5A6275'; ctx.font='10px Barlow,sans-serif'; ctx.textAlign='center';
-  [1,4,8,12,16].forEach(w=>ctx.fillText(`W${w}`,tx(w),CH-8));
+  const labelCount = 5;
+  const labelWeeks = new Set();
+  for (let i=0; i<labelCount; i++) {
+    labelWeeks.add(Math.round((chartMaxWeek/(labelCount-1))*i) || 1);
+  }
+  [...labelWeeks].forEach(w=>ctx.fillText(`W${w}`,tx(w),CH-8));
 }
 
 function renderLogTable(logs) {
@@ -1484,12 +1506,20 @@ function renderMeasHistory() {
   if (!el) return;
 
   const fields = [
-    {k:'waist', l:'Waist',    unit:'in', goodDir:'down'},
-    {k:'chest', l:'Chest',    unit:'in', goodDir:'up'},
-    {k:'hips',  l:'Hips',     unit:'in', goodDir:'down'},
-    {k:'arm',   l:'Arm',      unit:'in', goodDir:'up'},
-    {k:'bf',    l:'Body Fat', unit:'%',  goodDir:'down'},
-    {k:'rhr',   l:'Resting HR', unit:'bpm', goodDir:'down'},
+    {k:'waist',  l:'Waist',    unit:'in', goodDir:'down'},
+    {k:'neck',   l:'Neck',     unit:'in', goodDir:'neutral'},
+    {k:'chest',  l:'Chest',    unit:'in', goodDir:'up'},
+    {k:'hips',   l:'Hips',     unit:'in', goodDir:'down'},
+    {k:'armL',   l:'Arm L',    unit:'in', goodDir:'up'},
+    {k:'armR',   l:'Arm R',    unit:'in', goodDir:'up'},
+    {k:'forearmL', l:'Forearm L', unit:'in', goodDir:'up'},
+    {k:'forearmR', l:'Forearm R', unit:'in', goodDir:'up'},
+    {k:'thighL', l:'Thigh L',  unit:'in', goodDir:'up'},
+    {k:'thighR', l:'Thigh R',  unit:'in', goodDir:'up'},
+    {k:'calfL',  l:'Calf L',   unit:'in', goodDir:'up'},
+    {k:'calfR',  l:'Calf R',   unit:'in', goodDir:'up'},
+    {k:'bf',     l:'Body Fat (manual)', unit:'%',  goodDir:'down'},
+    {k:'rhr',    l:'Resting HR', unit:'bpm', goodDir:'down'},
   ];
 
   // Only weeks that have at least one measurement filled in
@@ -1499,7 +1529,7 @@ function renderMeasHistory() {
 
   if (!logs.length) {
     el.innerHTML = `<div style="text-align:center;padding:24px 10px;color:var(--text3);font-size:13px;line-height:1.6">
-      No measurements logged yet.<br>Tap "+ Log This Week" above and fill in waist, chest, hips, arm, body fat %, or resting HR — whichever you track.
+      No measurements logged yet.<br>Tap "+ Log This Week" above and fill in whichever you track — waist, neck, chest, hips, arm, thigh, calf, body fat %, or resting HR.
     </div>`;
     return;
   }
@@ -1516,9 +1546,9 @@ function renderMeasHistory() {
     let deltaHtml = '';
     if (!isNaN(firstVal) && logs.length > 1) {
       const delta = latestVal - firstVal;
-      const improved = f.goodDir === 'down' ? delta < 0 : delta > 0;
+      const improved = f.goodDir === 'down' ? delta < 0 : f.goodDir === 'up' ? delta > 0 : null;
       const arrow = delta === 0 ? '—' : (delta > 0 ? '▲' : '▼');
-      const color = delta === 0 ? 'var(--text3)' : (improved ? 'var(--green)' : 'var(--red)');
+      const color = delta === 0 ? 'var(--text3)' : (improved === null ? 'var(--text2)' : (improved ? 'var(--green)' : 'var(--red)'));
       deltaHtml = `<span style="color:${color};font-size:12px;font-weight:600;margin-left:6px">${arrow} ${Math.abs(delta).toFixed(1)}</span>`;
     }
 
@@ -1531,20 +1561,134 @@ function renderMeasHistory() {
 
   // Full history table
   h += `<div class="log-wrap" style="margin-top:14px"><table class="log-tbl">
-    <thead><tr><th>Wk</th><th>Waist</th><th>Chest</th><th>Hips</th><th>Arm</th><th>BF%</th><th>RHR</th></tr></thead>
+    <thead><tr><th>Wk</th><th>Waist</th><th>Neck</th><th>Chest</th><th>Hips</th><th>Arm L/R</th><th>Forearm L/R</th><th>Thigh L/R</th><th>Calf L/R</th><th>BF%</th><th>RHR</th></tr></thead>
     <tbody>`;
   [...logs].reverse().forEach(l => {
+    const armLR      = (l.armL || l.armR)         ? `${l.armL||'—'}/${l.armR||'—'}`         : '—';
+    const forearmLR  = (l.forearmL || l.forearmR) ? `${l.forearmL||'—'}/${l.forearmR||'—'}` : '—';
+    const thighLR    = (l.thighL || l.thighR)     ? `${l.thighL||'—'}/${l.thighR||'—'}`     : '—';
+    const calfLR     = (l.calfL || l.calfR)       ? `${l.calfL||'—'}/${l.calfR||'—'}`       : '—';
     h += `<tr>
       <td><span class="wk-pill">W${l.week}</span></td>
       <td>${l.waist ? `<span class="lift-val">${l.waist}"</span>` : '—'}</td>
+      <td>${l.neck  ? `<span class="lift-val">${l.neck}"</span>`  : '—'}</td>
       <td>${l.chest ? `<span class="lift-val">${l.chest}"</span>` : '—'}</td>
       <td>${l.hips  ? `<span class="lift-val">${l.hips}"</span>`  : '—'}</td>
-      <td>${l.arm   ? `<span class="lift-val">${l.arm}"</span>`   : '—'}</td>
+      <td><span class="lift-val" style="font-size:11.5px">${armLR}</span></td>
+      <td><span class="lift-val" style="font-size:11.5px">${forearmLR}</span></td>
+      <td><span class="lift-val" style="font-size:11.5px">${thighLR}</span></td>
+      <td><span class="lift-val" style="font-size:11.5px">${calfLR}</span></td>
       <td>${l.bf    ? `<span class="lift-val">${l.bf}%</span>`    : '—'}</td>
       <td>${l.rhr   ? `<span class="lift-val">${l.rhr}</span>`    : '—'}</td>
     </tr>`;
   });
   h += `</tbody></table></div>`;
+
+  el.innerHTML = h;
+}
+
+// ═══════════════════════════════════════════════════════════
+// BODY COMPOSITION CALCULATIONS
+// ═══════════════════════════════════════════════════════════
+
+/** US Navy Method (Hodgdon-Beckett formula, male, imperial units).
+ *  BF% = 86.010 × log10(waist − neck) − 70.041 × log10(height) + 36.76
+ *  Accuracy ~3–4% vs DEXA. All inputs in inches. */
+/** US Navy Method (Hodgdon-Beckett formula, male, imperial coefficients).
+ *  BF% = 86.010 × log10(waist − neck) − 70.041 × log10(height) + 36.76
+ *  Accuracy ~3–4% vs DEXA. Body-part inputs in INCHES, height in CENTIMETERS —
+ *  height is converted to inches internally so the verified imperial formula still applies. */
+function navyBodyFatPct(waistIn, neckIn, heightCm) {
+  const diff = waistIn - neckIn;
+  const heightIn = heightCm / 2.54;
+  if (diff <= 0 || heightIn <= 0) return null;
+  const bf = 86.010 * Math.log10(diff) - 70.041 * Math.log10(heightIn) + 36.76;
+  if (!isFinite(bf) || bf <= 0 || bf > 60) return null;
+  return bf;
+}
+
+function bodyCompStat(label, value, unit, sub) {
+  return `<div class="meas-hist-item">
+    <div class="mh-label">${label}</div>
+    <div class="mh-value">${value}<span class="mh-unit">${unit}</span></div>
+    ${sub ? `<div style="font-size:10.5px;color:var(--text3);margin-top:2px">${sub}</div>` : ''}
+  </div>`;
+}
+
+function renderBodyComposition() {
+  const el = document.getElementById('body-comp');
+  if (!el) return;
+
+  const logs = [...S.weekLog].sort((a,b) => +a.week - +b.week);
+  const latest = logs[logs.length - 1];
+  const heightCm = S.profile.heightCm || 175;
+  const heightIn = heightCm / 2.54;
+  const bodyWeight = latest?.weight ? parseFloat(latest.weight) : (S.profile.startW || 182);
+
+  if (!latest || !latest.waist || !latest.neck) {
+    el.innerHTML = `<div style="text-align:center;padding:24px 10px;color:var(--text3);font-size:13px;line-height:1.6">
+      Log your <strong style="color:var(--text2)">waist</strong> and <strong style="color:var(--text2)">neck</strong> measurements in inches (and confirm your height in cm in Profile) to unlock body fat %, lean mass, and health ratios here — calculated automatically.
+    </div>`;
+    return;
+  }
+
+  const waist = parseFloat(latest.waist);
+  const neck  = parseFloat(latest.neck);
+  const hips  = latest.hips ? parseFloat(latest.hips) : null;
+
+  const navyBF = navyBodyFatPct(waist, neck, heightCm);
+
+  let h = `<div class="meas-hist-grid">`;
+
+  if (navyBF !== null) {
+    h += bodyCompStat('Body Fat % (estimated)', navyBF.toFixed(1), '%', 'Navy Method');
+    const leanMass = bodyWeight * (1 - navyBF/100);
+    const fatMass  = bodyWeight * (navyBF/100);
+    h += bodyCompStat('Lean Mass', leanMass.toFixed(1), 'lbs', `at ${bodyWeight} lbs bodyweight`);
+    h += bodyCompStat('Fat Mass', fatMass.toFixed(1), 'lbs', '');
+  } else {
+    h += `<div class="meas-hist-item" style="grid-column:span 2">
+      <div class="mh-label">Body Fat %</div>
+      <div style="font-size:12.5px;color:var(--text3);margin-top:4px">Need waist &gt; neck to calculate — double-check your measurements.</div>
+    </div>`;
+  }
+
+  const whtr = waist / heightIn;
+  const whtrRisk = whtr < 0.5 ? 'Healthy range' : whtr < 0.6 ? 'Increased risk' : 'High risk';
+  const whtrColor = whtr < 0.5 ? 'var(--green)' : whtr < 0.6 ? 'var(--gold)' : 'var(--red)';
+  h += bodyCompStat('Waist-to-Height', whtr.toFixed(2), '', `<span style="color:${whtrColor}">${whtrRisk}</span> · keep under 0.50`);
+
+  if (hips) {
+    const whr = waist / hips;
+    const whrRisk = whr < 0.90 ? 'Low risk' : whr <= 1.0 ? 'Moderate risk' : 'High risk';
+    const whrColor = whr < 0.90 ? 'var(--green)' : whr <= 1.0 ? 'var(--gold)' : 'var(--red)';
+    h += bodyCompStat('Waist-to-Hip', whr.toFixed(2), '', `<span style="color:${whrColor}">${whrRisk}</span> (men)`);
+  }
+
+  h += `</div>`;
+
+  // Left/Right symmetry check — arm, forearm, thigh, calf
+  const symPairs = [
+    {label:'Arm L vs R',      l:latest.armL,      r:latest.armR},
+    {label:'Forearm L vs R',  l:latest.forearmL,  r:latest.forearmR},
+    {label:'Thigh L vs R',    l:latest.thighL,    r:latest.thighR},
+    {label:'Calf L vs R',     l:latest.calfL,     r:latest.calfR},
+  ].map(p => ({...p, delta: (p.l && p.r) ? Math.abs(parseFloat(p.l) - parseFloat(p.r)) : null}))
+   .filter(p => p.delta !== null);
+
+  if (symPairs.length > 0) {
+    h += `<div style="margin-top:14px">
+      <div class="mh-label" style="margin-bottom:8px">Left/Right Symmetry</div>`;
+    symPairs.forEach((p, i) => {
+      const flag = p.delta >= 0.5;
+      const border = i < symPairs.length - 1 ? 'border-bottom:1px solid var(--border);' : '';
+      h += `<div style="display:flex;justify-content:space-between;padding:8px 0;${border}font-size:13px">
+        <span>${p.label}</span>
+        <span style="color:${flag?'var(--gold)':'var(--text2)'};font-weight:600">Δ ${p.delta.toFixed(2)}"${flag?' — worth watching':''}</span>
+      </div>`;
+    });
+    h += `</div>`;
+  }
 
   el.innerHTML = h;
 }
@@ -1629,11 +1773,11 @@ function renderPullupProgress() {
   el.innerHTML = h;
 }
 
-function renderMilestones(lost) {
+function renderMilestones(lost, maxWeek) {
   const el = document.getElementById('milestones');
   if (!el) return;
   el.innerHTML = MILESTONES.map(m => {
-    const hit = lost >= m.thresh;
+    const hit = m.type === 'week' ? (maxWeek >= m.thresh) : (lost >= m.thresh);
     return `<div class="milestone${hit?' hit':''}">
       <span class="ms-wk">Wk ${m.wk}</span>
       <span>${m.txt}</span>
@@ -1652,10 +1796,18 @@ function openLogModal() {
     {id:'wl-ohp',l:'OHP (lbs)',type:'number',ph:'85'},
     {id:'wl-row',l:'Row (lbs)',type:'number',ph:'115'},
     {id:'wl-waist',l:'Waist (in)',type:'number',ph:'34',step:'0.25'},
+    {id:'wl-neck',l:'Neck (in)',type:'number',ph:'15.5',step:'0.25'},
     {id:'wl-chest',l:'Chest (in)',type:'number',ph:'42',step:'0.25'},
     {id:'wl-hips',l:'Hips (in)',type:'number',ph:'38',step:'0.25'},
-    {id:'wl-arm',l:'Arm (in)',type:'number',ph:'14',step:'0.25'},
-    {id:'wl-bf',l:'Body Fat %',type:'number',ph:'18',step:'0.5'},
+    {id:'wl-armL',l:'Arm L (in)',type:'number',ph:'14',step:'0.25'},
+    {id:'wl-armR',l:'Arm R (in)',type:'number',ph:'14',step:'0.25'},
+    {id:'wl-forearmL',l:'Forearm L (in)',type:'number',ph:'11',step:'0.25'},
+    {id:'wl-forearmR',l:'Forearm R (in)',type:'number',ph:'11',step:'0.25'},
+    {id:'wl-thighL',l:'Thigh L (in)',type:'number',ph:'22',step:'0.25'},
+    {id:'wl-thighR',l:'Thigh R (in)',type:'number',ph:'22',step:'0.25'},
+    {id:'wl-calfL',l:'Calf L (in)',type:'number',ph:'15',step:'0.25'},
+    {id:'wl-calfR',l:'Calf R (in)',type:'number',ph:'15',step:'0.25'},
+    {id:'wl-bf',l:'Body Fat % (manual)',type:'number',ph:'18',step:'0.5'},
     {id:'wl-rhr',l:'Resting HR',type:'number',ph:'65'},
     {id:'wl-negsec',l:'Negative Hold (sec)',type:'number',ph:'3',step:'0.5'},
     {id:'wl-pullupreps',l:'Unassisted Pull-Up Reps',type:'number',ph:'0'},
@@ -1686,9 +1838,17 @@ function saveWeekLog() {
     ohp:      document.getElementById('wl-ohp')?.value,
     row:      document.getElementById('wl-row')?.value,
     waist:    document.getElementById('wl-waist')?.value,
+    neck:     document.getElementById('wl-neck')?.value,
     chest:    document.getElementById('wl-chest')?.value,
     hips:     document.getElementById('wl-hips')?.value,
-    arm:      document.getElementById('wl-arm')?.value,
+    armL:      document.getElementById('wl-armL')?.value,
+    armR:      document.getElementById('wl-armR')?.value,
+    forearmL:  document.getElementById('wl-forearmL')?.value,
+    forearmR:  document.getElementById('wl-forearmR')?.value,
+    thighL:   document.getElementById('wl-thighL')?.value,
+    thighR:   document.getElementById('wl-thighR')?.value,
+    calfL:    document.getElementById('wl-calfL')?.value,
+    calfR:    document.getElementById('wl-calfR')?.value,
     bf:       document.getElementById('wl-bf')?.value,
     rhr:      document.getElementById('wl-rhr')?.value,
     negsec:      document.getElementById('wl-negsec')?.value,
@@ -1799,6 +1959,7 @@ Be direct, specific, and use this athlete's actual data. Under 250 words.`;
 function renderProfile() {
   document.getElementById('p-name').value   = S.profile.name || '';
   document.getElementById('p-sw').value     = S.profile.startW || 182;
+  document.getElementById('p-height').value = S.profile.heightCm || 175;
   document.getElementById('p-tw').value     = S.profile.targetW || 163;
   document.getElementById('p-sd').value     = S.profile.startDate || '';
   const n = S.profile.name || 'ATHLETE';
@@ -1810,6 +1971,7 @@ function renderProfile() {
 function saveProfile() {
   S.profile.name      = document.getElementById('p-name').value;
   S.profile.startW    = parseFloat(document.getElementById('p-sw').value)||182;
+  S.profile.heightCm  = parseFloat(document.getElementById('p-height').value)||175;
   S.profile.targetW   = parseFloat(document.getElementById('p-tw').value)||163;
   S.profile.startDate = document.getElementById('p-sd').value;
   persist(); renderProfile(); toast('Profile saved!');
